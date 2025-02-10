@@ -3,6 +3,13 @@
 let c = document.getElementById("canvas");
 c.width = window.innerWidth;
 c.height = window.innerHeight;
+const testCanvasSupportDisplay = false;
+if (!c.getContext || testCanvasSupportDisplay) {
+    let canvasSupport = document.getElementById("canvas-support");
+    if (canvasSupport) {
+        canvasSupport.style.display = "block";
+    }
+}
 let ctx = c.getContext("2d");
 ctx.strokeStyle = "rgb(0 0 0)"; // only time we stroke it's black (square border & world border)
 const frameWidth = 1500;
@@ -11,7 +18,7 @@ const worldWidth = 4500;
 const worldHeight = 2500;
 let circles = new Set();
 const squareSize = 50;
-const moveSpeed = 2;
+const moveSpeed = 10;
 class Frame {
     constructor(width, height) {
         this.x = 0;

@@ -1,8 +1,17 @@
 html, body {
     margin: 0 !important;
     padding: 0 !important;
+    overflow: hidden; /* hide scroll bar */
 }
-/*
-canvas#canvas {
-    border: 3px solid black;
-}*/
+
+div#canvas-support {
+    padding: 10px;
+    font-size: 40pt;
+    position: absolute;
+    display: none;
+}
+
+/* canvas#canvas {
+    width: 100%;
+    height: 100%;
+} */
