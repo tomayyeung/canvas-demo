@@ -1,41 +1,49 @@
-// set up canvas & context
 let c: HTMLCanvasElement = document.getElementById("canvas") as HTMLCanvasElement;
-c.width = window.innerWidth;
-c.height = window.innerHeight;
-
 const testCanvasSupportDisplay = false;
-if (!c.getContext || testCanvasSupportDisplay) {
-    let canvasSupport = document.getElementById("canvas-support");
-    if (canvasSupport) {
-        canvasSupport.style.display = "block";
-    }
-}
 
-let ctx: CanvasRenderingContext2D = c.getContext("2d") as CanvasRenderingContext2D;
-ctx.strokeStyle = "rgb(0 0 0)"; // only time we stroke it's black (square border & world border)
-
-const frameWidth = 1500;
-const frameHeight = 800;
+// player should not be able to get a larger fov with a larger monitor - max frame width and frame height
+const maxFrameWidth = 1500;
+const maxFrameHeight = 800;
+let frameWidth = maxFrameWidth;
+let frameHeight = maxFrameHeight;
 
 const worldWidth = 4500;
 const worldHeight = 2500;
-
-let circles = new Set<Circle>();
 
 const squareSize = 50;
 const moveSpeed = 10;
 
 class Frame {
-    x: number;
-    y: number;
+    x: number; // left
+    y: number; // top
     width: number;
     height: number;
+    toPixels: number;
 
-    constructor(width: number, height: number) {
-        this.x = 0;
+    constructor(windowWidth: number, windowHeight: number) {
+        this.x = 0; // will be immediately updated in run()
         this.y = 0;
-        this.width = width;
-        this.height = height;
+
+        this.width = 0, this.height = 0, this.toPixels = 0; // initialize these values first, then immediately adjust
+        this.adjust(windowWidth, windowHeight);
+    }
+
+    adjust(windowWidth: number, windowHeight: number) {
+        // compare ratios - which window dimension, relative to an ideal frame, is smaller?
+        let windowtoMaxFrameX = windowWidth/maxFrameWidth;
+        let windowtoMaxFrameY = windowHeight/maxFrameHeight;
+
+        if (windowtoMaxFrameX < windowtoMaxFrameY) {
+            // if window width is comparatively smaller, we fit the height first
+            this.height = windowHeight;
+            this.width = this.height * maxFrameWidth/maxFrameHeight;
+            this.toPixels = windowWidth/maxFrameWidth;
+        } else {
+            // if window height is comparatively smaller, we fit the width first
+            this.width = windowWidth;
+            this.height = this.width * maxFrameHeight/maxFrameWidth;            
+            this.toPixels = windowHeight/maxFrameHeight;
+        }
     }
 }
 
@@ -52,7 +60,7 @@ class Circle {
         this.color = color;
     }
 
-    display(frame: Frame) {
+    display(ctx: CanvasRenderingContext2D, frame: Frame) {
         // only display if it will be visible in frame
         if (this.x + this.size < frame.x) { // left
             return;
@@ -68,8 +76,10 @@ class Circle {
         }
 
         ctx.fillStyle = this.color;
+
+        let [drawX, drawY] = worldPosToScreenPos(this.x, this.y, frame);
         ctx.beginPath();
-        ctx.arc(this.x - frame.x, this.y - frame.y, this.size, 0, Math.PI*2, false);
+        ctx.arc(drawX, drawY, this.size*frame.toPixels, 0, Math.PI*2, false);
         ctx.fill();
     }
 }
@@ -105,23 +115,35 @@ class Square {
         return cornerDistance_sq <= circle.size*circle.size;
     }
 
-    draw(frame: Frame) {
+    draw(ctx: CanvasRenderingContext2D, frame: Frame) {
         ctx.fillStyle = this.color;
-        ctx.fillRect(this.x - frame.x, this.y - frame.y, squareSize, squareSize);
-        
-        ctx.strokeRect(this.x - frame.x, this.y - frame.y, squareSize, squareSize);
+
+        let [drawX, drawY] = worldPosToScreenPos(this.x, this.y, frame);
+        ctx.fillRect(drawX, drawY, this.size*frame.toPixels, this.size*frame.toPixels); // colored body
+        ctx.strokeRect(drawX, drawY, this.size*frame.toPixels, this.size*frame.toPixels); // border
     }
 }
 
-let square = new Square(0, 0, squareSize, "rgb(255, 255, 255)");
+/**
+ * Converts world (x, y) coordinates to screen (x, y) coordinates
+ * @param x world x
+ * @param y world y
+ * @param frame current viewing frame
+ */
+function worldPosToScreenPos(x: number, y: number, frame: Frame) {
+    let screenX = (x - frame.x) * frame.toPixels;
+    let screenY = (y - frame.y) * frame.toPixels;
 
-document.addEventListener("keydown", keyDownHandler);
-document.addEventListener("keyup", keyUpHandler);
+    return [screenX, screenY];
+}
 
 let movingLeft: boolean = false;
 let movingRight: boolean = false;
 let movingUp: boolean = false;
 let movingDown: boolean = false;
+
+document.addEventListener("keydown", keyDownHandler);
+document.addEventListener("keyup", keyUpHandler);
 
 function keyDownHandler(event: KeyboardEvent) {
     switch (event.code) {
@@ -157,6 +179,14 @@ function keyUpHandler(event: KeyboardEvent) {
    }
 }
 
+let frame = new Frame(frameWidth, frameHeight);
+
+window.addEventListener("resize", windowResizeHandler)
+
+function windowResizeHandler(event: UIEvent) {
+    frame.adjust(window.innerWidth, window.innerHeight);
+}
+
 function move(square: Square) {
     if (movingLeft && square.x > -worldWidth/2) {
         square.x -= moveSpeed;
@@ -170,11 +200,11 @@ function move(square: Square) {
     }
 }
 
-function run(frame: Frame) {
+function run(c: HTMLCanvasElement, ctx: CanvasRenderingContext2D, frame: Frame, square: Square, circles: Set<Circle>) {
     // move square based on keyboard input
     move(square);
 
-    // update frame based on square
+    // update frame location based on square
     frame.x = square.x + squareSize/2 - frameWidth/2;
     frame.y = square.y + squareSize/2 - frameHeight/2;
 
@@ -185,21 +215,39 @@ function run(frame: Frame) {
 
     // display each circle
     for (let circle of circles) {
-        circle.display(frame);
+        circle.display(ctx, frame);
         if (square.detectContact(circle)) {
             square.color = circle.color;
         }
     }
 
-    square.draw(frame);
+    square.draw(ctx, frame);
 
-    window.requestAnimationFrame(() => (run(frame)));
+    window.requestAnimationFrame(() => (run(c, ctx, frame, square, circles)));
 }
 
 function start() {
+    // set up canvas & context
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+
+    if (!c.getContext || testCanvasSupportDisplay) {
+        let canvasSupport = document.getElementById("canvas-support");
+        if (canvasSupport) {
+            canvasSupport.style.display = "block";
+        }
+        return;
+    }
+
+    let ctx: CanvasRenderingContext2D = c.getContext("2d") as CanvasRenderingContext2D;
+    ctx.strokeStyle = "rgb(0 0 0)"; // only time we stroke it's black (square border & world border)
+
     let frame = new Frame(frameWidth, frameHeight);
 
+    let square = new Square(0, 0, squareSize, "rgb(255, 255, 255)");
+
     // create circles with random x, y, size, color 
+    let circles = new Set<Circle>();
     let numCircles = 50;
     for (let i = 0; i < numCircles; i++) {
         let x = Math.random()*worldWidth - 0.5*worldWidth;
@@ -210,7 +258,7 @@ function start() {
         circles.add(new Circle(x, y, size, color));
     }
 
-    run(frame);
+    run(c, ctx, frame, square, circles);
 }
 
 window.onload = start;
