@@ -106,16 +106,12 @@ function worldPosToScreenPos(x, y, frame) {
     let screenY = (y - frame.y) * frame.toPixels;
     return [screenX, screenY];
 }
-let frame = new Frame(frameWidth, frameHeight);
-// window.onresize = function() {
-//     frame.adjust(window.innerWidth, window.innerHeight);
-// }
-document.addEventListener("keydown", keyDownHandler);
-document.addEventListener("keyup", keyUpHandler);
 let movingLeft = false;
 let movingRight = false;
 let movingUp = false;
 let movingDown = false;
+document.addEventListener("keydown", keyDownHandler);
+document.addEventListener("keyup", keyUpHandler);
 function keyDownHandler(event) {
     switch (event.code) {
         case "ArrowLeft":
@@ -148,10 +144,10 @@ function keyUpHandler(event) {
             break;
     }
 }
+let frame = new Frame(frameWidth, frameHeight);
 window.addEventListener("resize", windowResizeHandler);
 function windowResizeHandler(event) {
     frame.adjust(window.innerWidth, window.innerHeight);
-    //console.log("resize");
 }
 function move(square) {
     if (movingLeft && square.x > -worldWidth / 2) {
